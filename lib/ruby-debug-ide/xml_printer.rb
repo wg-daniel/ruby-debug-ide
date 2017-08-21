@@ -1,6 +1,10 @@
 require 'stringio'
 require 'cgi'
 require 'monitor'
+require 'set'
+if (!defined?(JRUBY_VERSION))
+  require 'objspace'
+end
 
 module Debugger
 
@@ -10,29 +14,21 @@ module Debugger
     SPECIAL_SYMBOL_MESSAGE = lambda {|e| '<?>'}
   end
 
-  class ExecError
+  class ExecError < StandardError
     attr_reader :message
+    attr_reader :trace_point
     attr_reader :backtrace
 
-    def initialize(message, backtrace = [])
+    def initialize(message, trace_point, backtrace = [])
       @message = message
+      @trace_point = trace_point
       @backtrace = backtrace
     end
   end
 
-  class SimpleTimeLimitError < StandardError
-    attr_reader :message
+  class MemoryLimitError < ExecError; end
 
-    def initialize(message)
-      @message = message
-    end
-  end
-
-  class MemoryLimitError < ExecError;
-  end
-
-  class TimeLimitError < ExecError;
-  end
+  class TimeLimitError < ExecError; end
 
   class XmlPrinter # :nodoc:
     class ExceptionProxy
@@ -150,7 +146,7 @@ module Debugger
           if k.class.name == "String"
             name = '\'' + k + '\''
           else
-            name = exec_with_allocation_control(k, :to_s, OverflowMessageType::EXCEPTION_MESSAGE)
+            name = exec_with_allocation_control(k, ENV['DEBUGGER_MEMORY_LIMIT'].to_i, ENV['INSPECT_TIME_LIMIT'].to_i, :to_s, OverflowMessageType::EXCEPTION_MESSAGE)
           end
           print_variable(name, hash[k], 'instance')
         }
@@ -168,77 +164,51 @@ module Debugger
       end
     end
 
-    def exec_with_timeout(sec, error_message)
-      return yield if sec == nil or sec.zero?
-      if Thread.respond_to?(:critical) and Thread.critical
-        raise ThreadError, "timeout within critical session"
-      end
-      begin
-        x = Thread.current
-        y = DebugThread.start {
-          sleep sec
-          x.raise SimpleTimeLimitError.new(error_message) if x.alive?
-        }
-        yield sec
-      ensure
-        y.kill if y and y.alive?
-      end
-    end
+    def exec_with_allocation_control(value, memory_limit, time_limit, exec_method, overflow_message_type)
+      return value.send exec_method if RUBY_VERSION < '2.0'
 
-    def exec_with_allocation_control(value, exec_method, overflow_message_type)
-      return value.send exec_method unless Debugger.trace_to_s
+      check_memory_limit = !defined?(JRUBY_VERSION) && ENV['DEBUGGER_MEMORY_LIMIT'].to_i > 0
+      curr_thread = Thread.current
 
-      memory_limit = Debugger.debugger_memory_limit
-      time_limit = Debugger.inspect_time_limit
-
-      if defined?(JRUBY_VERSION) || RUBY_VERSION < '2.0' || memory_limit <= 0
-        return exec_with_timeout(time_limit * 1e-3, "Timeout: evaluation of #{exec_method} took longer than #{time_limit}ms.") { value.send exec_method }
-      end
-
-      require 'objspace'
-      trace_queue = Queue.new
+      result = nil
+      init_threads = Set.new
+      Thread.list.each {|t| init_threads.add t}
 
       inspect_thread = DebugThread.start do
-        start_alloc_size = ObjectSpace.memsize_of_all
+        start_alloc_size = ObjectSpace.memsize_of_all if check_memory_limit
         start_time = Time.now.to_f
 
-        trace_point = TracePoint.new(:c_call, :call) do |tp|
+        trace_point = TracePoint.new(:c_call, :call) do | |
+          next if init_threads.include?(Thread.current)
+          next unless rand > 0.75
+
           curr_time = Time.now.to_f
 
           if (curr_time - start_time) * 1e3 > time_limit
-            trace_queue << TimeLimitError.new("Timeout: evaluation of #{exec_method} took longer than #{time_limit}ms.", caller.to_a)
-            trace_point.disable
-            inspect_thread.kill
+            curr_thread.raise TimeLimitError.new("Timeout: evaluation of #{exec_method} took longer than #{time_limit}ms.", trace_point, caller.to_a)
           end
 
-          next unless rand > 0.75
+          if check_memory_limit
+            curr_alloc_size = ObjectSpace.memsize_of_all
+            start_alloc_size = curr_alloc_size if curr_alloc_size < start_alloc_size
 
-          curr_alloc_size = ObjectSpace.memsize_of_all
-          start_alloc_size = curr_alloc_size if curr_alloc_size < start_alloc_size
-
-          if curr_alloc_size - start_alloc_size > 1e6 * memory_limit
-            trace_queue << MemoryLimitError.new("Out of memory: evaluation of #{exec_method} took more than #{memory_limit}mb.", caller.to_a)
-            trace_point.disable
-            inspect_thread.kill
+            if curr_alloc_size - start_alloc_size > 1e6 * memory_limit
+              curr_thread.raise MemoryLimitError.new("Out of memory: evaluation of #{exec_method} took more than #{memory_limit}mb.", trace_point, caller.to_a)
+            end
           end
         end
         trace_point.enable
         result = value.send exec_method
-        trace_queue << result
         trace_point.disable
       end
-
-      while(mes = trace_queue.pop)
-        if(mes.is_a? TimeLimitError or mes.is_a? MemoryLimitError)
-          print_debug(mes.message + "\n" + mes.backtrace.map {|l| "\t#{l}"}.join("\n"))
-          return overflow_message_type.call(mes)
-        else
-          return mes
-        end
-      end
-    rescue SimpleTimeLimitError => e
-      print_debug(e.message)
+      inspect_thread.join
+      return result
+    rescue ExecError => e
+      e.trace_point.disable
+      print_debug(e.message + "\n" + e.backtrace.map {|l| "\t#{l}"}.join("\n"))
       return overflow_message_type.call(e)
+    ensure
+      inspect_thread.kill if inspect_thread && inspect_thread.alive?
     end
 
     def print_variable(name, value, kind)
@@ -261,7 +231,7 @@ module Debugger
       else
         has_children = !value.instance_variables.empty? || !value.class.class_variables.empty?
 
-        value_str = exec_with_allocation_control(value, :to_s, OverflowMessageType::EXCEPTION_MESSAGE) || 'nil' rescue "<#to_s method raised exception: #{$!}>"
+        value_str = exec_with_allocation_control(value, ENV['DEBUGGER_MEMORY_LIMIT'].to_i, ENV['INSPECT_TIME_LIMIT'].to_i, :to_s, OverflowMessageType::EXCEPTION_MESSAGE) || 'nil' rescue "<#to_s method raised exception: #{$!}>"
         unless value_str.is_a?(String)
           value_str = "ERROR: #{value.class}.to_s method returns #{value_str.class}. Should return String."
         end
@@ -279,7 +249,7 @@ module Debugger
       print("<variable name=\"%s\" %s kind=\"%s\" %s type=\"%s\" hasChildren=\"%s\" objectId=\"%#+x\">",
             CGI.escapeHTML(name), build_compact_value_attr(value, value_str), kind,
             build_value_attr(escaped_value_str), value.class,
-            has_children, value.object_id)
+            has_children, value.respond_to?(:object_id) ? value.object_id : value.id)
       print("<value><![CDATA[%s]]></value>", escaped_value_str) if Debugger.value_as_nested_element
       print('</variable>')
     rescue StandardError => e
@@ -487,7 +457,7 @@ module Debugger
     def compact_array_str(value)
       slice = value[0..10]
 
-      compact = exec_with_allocation_control(slice, :inspect, OverflowMessageType::NIL_MESSAGE)
+      compact = exec_with_allocation_control(slice, ENV['DEBUGGER_MEMORY_LIMIT'].to_i, ENV['INSPECT_TIME_LIMIT'].to_i, :inspect, OverflowMessageType::NIL_MESSAGE)
 
       if compact && value.size != slice.size
         compact[0..compact.size - 2] + ", ...]"
@@ -499,14 +469,14 @@ module Debugger
       keys_strings = Hash.new
 
       slice = value.sort_by do |k, _|
-        keys_string = exec_with_allocation_control(k, :to_s, OverflowMessageType::SPECIAL_SYMBOL_MESSAGE)
+        keys_string = exec_with_allocation_control(k, ENV['DEBUGGER_MEMORY_LIMIT'].to_i, ENV['INSPECT_TIME_LIMIT'].to_i, :to_s, OverflowMessageType::SPECIAL_SYMBOL_MESSAGE)
         keys_strings[k] = keys_string
         keys_string
       end[0..5]
 
       compact = slice.map do |kv|
         key_string = keys_strings[kv[0]]
-        value_string = exec_with_allocation_control(kv[1], :to_s, OverflowMessageType::SPECIAL_SYMBOL_MESSAGE)
+        value_string = exec_with_allocation_control(kv[1], ENV['DEBUGGER_MEMORY_LIMIT'].to_i, ENV['INSPECT_TIME_LIMIT'].to_i, :to_s, OverflowMessageType::SPECIAL_SYMBOL_MESSAGE)
         "#{key_string}: #{handle_binary_data(value_string)}"
       end.join(", ")
       "{" + compact + (slice.size != value.size ? ", ..." : "") + "}"
