@@ -1,6 +1,7 @@
 require 'stringio'
 require 'cgi'
 require 'monitor'
+require 'set'
 if (!defined?(JRUBY_VERSION))
   require 'objspace'
 end
@@ -170,12 +171,15 @@ module Debugger
       curr_thread = Thread.current
 
       result = nil
+      init_threads = Set.new
+      Thread.list.each {|t| init_threads.add t}
+
       inspect_thread = DebugThread.start do
         start_alloc_size = ObjectSpace.memsize_of_all if check_memory_limit
         start_time = Time.now.to_f
 
         trace_point = TracePoint.new(:c_call, :call) do | |
-          next unless Thread.current == inspect_thread
+          next if init_threads.include?(Thread.current)
           next unless rand > 0.75
 
           curr_time = Time.now.to_f
