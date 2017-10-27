@@ -3,7 +3,7 @@ require 'cgi'
 require 'monitor'
 require 'set'
 if (!defined?(JRUBY_VERSION))
-  require 'objspace'
+  include ObjectSpace
 end
 
 module Debugger
