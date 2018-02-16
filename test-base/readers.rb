@@ -18,7 +18,7 @@ module Readers
   DebugException = Struct.new("DebugException", :file, :line, :type, :message, :threadId)
   RubyThread = Struct.new("RubyThread", :id, :status)
   Frame = Struct.new("Frame", :no, :file, :line)
-  Variable = Struct.new("Variable", :name, :kind, :value, :type, :hasChildren, :objectId)
+  Variable = Struct.new("Variable", :name, :kind, :value, :type, :hasChildren, :objectId, :keyObjectId)
   ExpressionInfo = Struct.new("ExpressionInfo", :incomplete, :prompt, :indent)
 
   def read_breakpoint_added

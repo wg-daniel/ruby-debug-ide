@@ -199,22 +199,62 @@ module VariablesTest
     send_cont
   end
 
+  def test_new_hash_presentation
+    create_socket ['class A',
+                   '  def to_s',
+                   '    "A instance"',
+                   '  end',
+                   'end',
+
+                   'class C',
+                   '  def to_s',
+                   '    "C instance"',
+                   '  end',
+                   'end',
+
+                   'b = Hash.new',
+                   'c = C.new',
+                   'a = A.new',
+                   'b[1] = a',
+                   'b[a] = "1"',
+                   'b[c] = a',
+                   'puts b #bp here']
+    run_to_line(17)
+    send_ruby('v l')
+    assert_variables(read_variables, 3,
+                     {:name => "a", :value => "A instance",:type => "A"},
+                     {:name => "b", :value => "Hash (3 elements)", :type => "Hash"},
+                     {:name => "c", :value => "C instance", :type => "C"})
+
+    send_ruby("v i b")
+    result_variables = read_variables
+    a_object_id = result_variables[0][:objectId]
+    assert_not_nil a_object_id
+
+    assert_variables(result_variables, 3,
+                     {:name => "1", :value => "A instance", :objectId => a_object_id},
+                     {:name => "A instance", :value => "1", :keyObjectId => a_object_id},
+                     {:name => "C instance", :value => "A instance", :objectId => a_object_id},)
+    send_cont
+  end
+
   def test_to_s_timelimit
     create_socket ['class A',
-      'def to_s',
-        'a = 1',
-        'loop do',
-          'a = a + 1',
-          'sleep 1',
-          'break if (a > 2)',
-        'end',
-        'a.to_s',
-      'end',
-    'end',
-    'b = Hash.new',
-    'b[A.new] = A.new',
-    'b[1] = A.new',
-    'puts b #bp here']
+                    'def to_s',
+                      'a = 1',
+                      'loop do',
+                        'a = a + 1',
+                        'sleep 1',
+                        'break if (a > 2)',
+                      'end',
+                      'a.to_s',
+                    'end',
+                   'end',
+
+                   'b = Hash.new',
+                   'b[A.new] = A.new',
+                   'b[1] = A.new',
+                   'puts b #bp here']
     run_to_line(15)
     send_ruby('v l')
     assert_variables(read_variables, 1,

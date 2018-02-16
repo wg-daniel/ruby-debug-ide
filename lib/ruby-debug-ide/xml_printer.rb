@@ -152,7 +152,7 @@ module Debugger
           else
             name = exec_with_allocation_control(k, :to_s, OverflowMessageType::EXCEPTION_MESSAGE)
           end
-          print_variable(name, hash[k], 'instance')
+          print_variable(name, hash[k], 'instance', sprintf("keyObjectId = \"%#+x\"", k.object_id))
         }
       end
     end
@@ -241,8 +241,13 @@ module Debugger
       return overflow_message_type.call(e)
     end
 
-    def print_variable(name, value, kind)
+    def print_variable(name, value, kind, additional_text = nil)
       name = name.to_s
+
+      unless additional_text.nil?
+        additional_text = ' ' + additional_text unless additional_text.start_with? ' '
+      end
+
       if value.nil?
         print("<variable name=\"%s\" kind=\"%s\"/>", CGI.escapeHTML(name), kind)
         return
@@ -276,10 +281,11 @@ module Debugger
       end
       value_str = handle_binary_data(value_str)
       escaped_value_str = CGI.escapeHTML(value_str)
-      print("<variable name=\"%s\" %s kind=\"%s\" %s type=\"%s\" hasChildren=\"%s\" objectId=\"%#+x\">",
+      print("<variable name=\"%s\" %s kind=\"%s\" %s type=\"%s\" hasChildren=\"%s\" objectId=\"%#+x\"%s>",
             CGI.escapeHTML(name), build_compact_value_attr(value, value_str), kind,
             build_value_attr(escaped_value_str), value.class,
-            has_children, value.object_id)
+            has_children, value.object_id, (additional_text.nil? ? '' : additional_text))
+
       print("<value><![CDATA[%s]]></value>", escaped_value_str) if Debugger.value_as_nested_element
       print('</variable>')
     rescue StandardError => e
