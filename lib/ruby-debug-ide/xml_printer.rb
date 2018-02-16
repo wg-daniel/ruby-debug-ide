@@ -146,13 +146,13 @@ module Debugger
 
     def print_hash(hash)
       print_element("variables") do
-        hash.keys.each {|k|
+        hash.each {|(k, v)|
           if k.class.name == "String"
             name = '\'' + k + '\''
           else
             name = exec_with_allocation_control(k, :to_s, OverflowMessageType::EXCEPTION_MESSAGE)
           end
-          print_variable(name, hash[k], 'instance', sprintf("keyObjectId = \"%#+x\"", k.object_id))
+          print_variable(name, v, 'instance', sprintf("keyObjectId = \"%#+x\"", k.object_id))
         }
       end
     end
