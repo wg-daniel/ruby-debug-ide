@@ -144,16 +144,30 @@ module Debugger
       end
     end
 
-    def print_hash(hash)
-      print_element("variables") do
+    def print_hash_key_value(hash)
+      print_element("variables", ' type="hashItem"') do
         hash.each {|(k, v)|
-          if k.class.name == "String"
-            name = '\'' + k + '\''
-          else
-            name = exec_with_allocation_control(k, :to_s, OverflowMessageType::EXCEPTION_MESSAGE)
-          end
-          print_variable(name, v, 'instance', sprintf("keyObjectId = \"%#+x\"", k.object_id))
+          print_variable('key', k, 'instance')
+          print_variable('value', v, 'instance')
         }
+      end
+    end
+
+    def print_hash(hash)
+      puts Debugger.key_value_mode
+      if Debugger.key_value_mode
+        print_hash_key_value(hash)
+      else
+        print_element("variables") do
+          hash.each {|(k, v)|
+            if k.class.name == "String"
+              name = '\'' + k + '\''
+            else
+              name = exec_with_allocation_control(k, :to_s, OverflowMessageType::EXCEPTION_MESSAGE)
+            end
+            print_variable(name, v, 'instance')
+          }
+        end
       end
     end
 
@@ -241,12 +255,8 @@ module Debugger
       return overflow_message_type.call(e)
     end
 
-    def print_variable(name, value, kind, additional_text = nil)
+    def print_variable(name, value, kind)
       name = name.to_s
-
-      unless additional_text.nil?
-        additional_text = ' ' + additional_text unless additional_text.start_with? ' '
-      end
 
       if value.nil?
         print("<variable name=\"%s\" kind=\"%s\"/>", CGI.escapeHTML(name), kind)
@@ -281,10 +291,10 @@ module Debugger
       end
       value_str = handle_binary_data(value_str)
       escaped_value_str = CGI.escapeHTML(value_str)
-      print("<variable name=\"%s\" %s kind=\"%s\" %s type=\"%s\" hasChildren=\"%s\" objectId=\"%#+x\"%s>",
+      print("<variable name=\"%s\" %s kind=\"%s\" %s type=\"%s\" hasChildren=\"%s\" objectId=\"%#+x\">",
             CGI.escapeHTML(name), build_compact_value_attr(value, value_str), kind,
             build_value_attr(escaped_value_str), value.class,
-            has_children, value.object_id, (additional_text.nil? ? '' : additional_text))
+            has_children, value.object_id)
 
       print("<value><![CDATA[%s]]></value>", escaped_value_str) if Debugger.value_as_nested_element
       print('</variable>')
@@ -445,8 +455,8 @@ module Debugger
       end
     end
 
-    def print_element(name)
-      print("<#{name}>")
+    def print_element(name, additional_tag = '')
+      print("<#{name}#{additional_tag}>")
       begin
         yield
       ensure
