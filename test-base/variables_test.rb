@@ -227,12 +227,9 @@ module VariablesTest
                      {:name => "c", :value => "C instance", :type => "C"})
 
     send_ruby("v i b")
-    result_variables = read_variables
-    a_object_id = result_variables[0][:objectId]
-    assert_not_nil a_object_id
 
-    assert_variables(result_variables, 6,
-                     {:name => "key", :value => "1", :type => "Fixnum"},
+    assert_variables(read_variables, 6,
+                     {:name => "key", :value => "1"},
                      {:name => "value", :value => "A instance", :type => "A"},
 
                      {:name => "key", :value => "A instance", :type => "A"},
