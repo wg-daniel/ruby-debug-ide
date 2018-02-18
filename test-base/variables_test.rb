@@ -218,7 +218,7 @@ module VariablesTest
                    'b[1] = a',
                    'b[a] = "1"',
                    'b[c] = a',
-                   'puts b #bp here']
+                   'puts b #bp here'], '--key-value'
     run_to_line(17)
     send_ruby('v l')
     assert_variables(read_variables, 3,
@@ -231,10 +231,15 @@ module VariablesTest
     a_object_id = result_variables[0][:objectId]
     assert_not_nil a_object_id
 
-    assert_variables(result_variables, 3,
-                     {:name => "1", :value => "A instance", :objectId => a_object_id},
-                     {:name => "A instance", :value => "1", :keyObjectId => a_object_id},
-                     {:name => "C instance", :value => "A instance", :objectId => a_object_id},)
+    assert_variables(result_variables, 6,
+                     {:name => "key", :value => "1", :type => "Fixnum"},
+                     {:name => "value", :value => "A instance", :type => "A"},
+
+                     {:name => "key", :value => "A instance", :type => "A"},
+                     {:name => "value", :value => "1", :type => "String"},
+
+                     {:name => "key", :value => "C instance", :type => "C"},
+                     {:name => "value", :value => "A instance", :type => "A"})
     send_cont
   end
 
@@ -254,7 +259,7 @@ module VariablesTest
                    'b = Hash.new',
                    'b[A.new] = A.new',
                    'b[1] = A.new',
-                   'puts b #bp here']
+                   'puts b #bp here'], '--evaluation-control --time-limit 100 --memory-limit 0'
     run_to_line(15)
     send_ruby('v l')
     assert_variables(read_variables, 1,
