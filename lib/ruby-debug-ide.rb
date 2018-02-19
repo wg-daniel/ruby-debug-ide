@@ -121,8 +121,8 @@ module Debugger
           host ||= '127.0.0.1'
 
           server = notify_dispatcher_if_needed(host, port, notify_dispatcher) do |real_port|
-            print_greeting_msg($stderr, host, real_port)
-            TCPServer.new(host, real_port) if defined? IDE_VERSION
+            print_greeting_msg($stderr, host, real_port) if defined? IDE_VERSION
+            TCPServer.new(host, real_port)
           end
 
           return unless server
