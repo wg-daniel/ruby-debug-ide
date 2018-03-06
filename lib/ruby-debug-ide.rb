@@ -72,17 +72,17 @@ module Debugger
       end
     end
 
-    def start_server(host = nil, port = 1234, notify_dispatcher = false)
+    def start_server(port = 1234)
       return if started?
       start
-      start_control(host, port, notify_dispatcher)
+      start_control(port)
     end
 
     def prepare_debugger(options)
       @mutex = Mutex.new
       @proceed = ConditionVariable.new
 
-      start_server(options.host, options.port, options.notify_dispatcher)
+      start_server(options.port)
 
       raise "Control thread did not start (#{@control_thread}}" unless @control_thread && @control_thread.alive?
 
@@ -110,80 +110,37 @@ module Debugger
       end
     end
 
-    def start_control(host, port, notify_dispatcher)
+    def start_control(port)
       raise "Debugger is not started" unless started?
       return if @control_thread
       @control_thread = DebugThread.new do
         begin
           # 127.0.0.1 seemingly works with all systems and with IPv6 as well.
           # "localhost" and nil have problems on some systems.
-          host ||= '127.0.0.1'
+          host = '127.0.0.1'
 
-          if notify_dispatcher
-            server = notify_dispatcher_and_start host, port
-          else
-            server = TCPServer.new(host, port)
-            print_greeting_msg($stderr, host, port)
-          end
+          session = TCPSocket.new(host, port)
+          print_greeting_msg($stderr, host, port)
+          session.puts Process.pid
 
-          return unless server
+          return unless session
 
-          while (session = server.accept)
-            $stderr.puts "Connected from #{session.peeraddr[2]}" if Debugger.cli_debug
-            dispatcher = ENV['IDE_PROCESS_DISPATCHER']
-            if dispatcher
-              ENV['IDE_PROCESS_DISPATCHER'] = "#{session.peeraddr[2]}:#{dispatcher}" unless dispatcher.include?(":")
-              ENV['DEBUGGER_HOST'] = host
-            end
-            begin
-              @interface = RemoteInterface.new(session)
-              self.handler = EventProcessor.new(interface)
-              IdeControlCommandProcessor.new(interface).process_commands
-            rescue StandardError, ScriptError => ex
-              bt = ex.backtrace
-              $stderr.printf "#{Process.pid}: Exception in DebugThread loop: #{ex.message}(#{ex.class})\nBacktrace:\n#{bt ? bt.join("\n  from: ") : "<none>"}\n"
-              exit 1
-            end
+          $stderr.puts "Connected from #{session.peeraddr[2]}" if Debugger.cli_debug
+
+          begin
+            @interface = RemoteInterface.new(session)
+            self.handler = EventProcessor.new(interface)
+            IdeControlCommandProcessor.new(interface).process_commands
+          rescue StandardError, ScriptError => ex
+            bt = ex.backtrace
+            $stderr.printf "#{Process.pid}: Exception in DebugThread loop: #{ex.message}(#{ex.class})\nBacktrace:\n#{bt ? bt.join("\n  from: ") : "<none>"}\n"
+            exit 1
           end
         rescue
           bt = $!.backtrace
           $stderr.printf "Fatal exception in DebugThread loop: #{$!.message}\nBacktrace:\n#{bt ? bt.join("\n  from: ") : "<none>"}\n"
           exit 2
         end
-      end
-    end
-
-    private
-
-    def notify_dispatcher_and_start(host, port)
-      return unless ENV['IDE_PROCESS_DISPATCHER']
-      acceptor_host, acceptor_port = ENV['IDE_PROCESS_DISPATCHER'].split(":")
-      acceptor_host, acceptor_port = '127.0.0.1', acceptor_host unless acceptor_port
-      connected = false
-
-      3.times do |i|
-        begin
-          s = TCPSocket.open(acceptor_host, acceptor_port)
-          dispatcher_answer = s.gets.chomp
-
-          if dispatcher_answer == "true"
-            port = Debugger.find_free_port(host)
-          end
-
-          server = TCPServer.new(host, port)
-          print_greeting_msg($stderr, host, port)
-
-          s.print(port)
-          s.close
-          connected = true
-          print_debug "Ide process dispatcher notified about sub-debugger which listens on #{port}\n"
-          return server
-        rescue => bt
-          $stderr.puts "#{Process.pid}: connection failed(#{i+1})"
-          $stderr.puts "Exception: #{bt}"
-          $stderr.puts bt.backtrace.map { |l| "\t#{l}" }.join("\n")
-          sleep 0.3
-        end unless connected
       end
     end
   end

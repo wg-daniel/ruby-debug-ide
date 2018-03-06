@@ -309,32 +309,32 @@ module Debugger
     end
 
     def print_breakpoint_added(b)
-      print "<breakpointAdded no=\"%s\" location=\"%s:%s\"/>", b.id, CGI.escapeHTML(b.source), b.pos
+      print "<breakpointAdded no=\"%s\" location=\"%s:%s\"/>\n", b.id, CGI.escapeHTML(b.source), b.pos
     end
 
     def print_breakpoint_deleted(b)
-      print "<breakpointDeleted no=\"%s\"/>", b.id
+      print "<breakpointDeleted no=\"%s\"/>\n", b.id
     end
 
     def print_breakpoint_enabled(b)
-      print "<breakpointEnabled bp_id=\"%s\"/>", b.id
+      print "<breakpointEnabled bp_id=\"%s\"/>\n", b.id
     end
 
     def print_breakpoint_disabled(b)
-      print "<breakpointDisabled bp_id=\"%s\"/>", b.id
+      print "<breakpointDisabled bp_id=\"%s\"/>\n", b.id
     end
 
     def print_contdition_set(bp_id)
-      print "<conditionSet bp_id=\"%d\"/>", bp_id
+      print "<conditionSet bp_id=\"%d\"/>\n", bp_id
     end
 
     def print_catchpoint_set(exception_class_name)
-      print "<catchpointSet exception=\"%s\"/>", exception_class_name
+      print "<catchpointSet exception=\"%s\"/>\n", exception_class_name
     end
 
     def print_catchpoint_deleted(exception_class_name)
       if Debugger.catchpoint_deleted_event
-        print "<catchpointDeleted exception=\"%s\"/>", exception_class_name
+        print "<catchpointDeleted exception=\"%s\"/>\n", exception_class_name
       else
         print_catchpoint_set(exception_class_name)
       end
@@ -349,16 +349,16 @@ module Debugger
     end
 
     def print_expression(exp, value, idx)
-      print "<dispay name=\"%s\" value=\"%s\" no=\"%d\" />", exp, value, idx
+      print "<dispay name=\"%s\" value=\"%s\" no=\"%d\" />\n", exp, value, idx
     end
 
     def print_expression_info(incomplete, prompt, indent)
-      print "<expressionInfo incomplete=\"%s\" prompt=\"%s\" indent=\"%s\"></expressionInfo>",
+      print "<expressionInfo incomplete=\"%s\" prompt=\"%s\" indent=\"%s\"></expressionInfo>\n",
             incomplete, CGI.escapeHTML(prompt), indent
     end
 
     def print_eval(exp, value)
-      print "<eval expression=\"%s\" value=\"%s\" />", CGI.escapeHTML(exp), value
+      print "<eval expression=\"%s\" value=\"%s\" />\n", CGI.escapeHTML(exp), value
     end
 
     def print_pp(value)
@@ -393,13 +393,13 @@ module Debugger
     # Events
 
     def print_breakpoint(_, breakpoint)
-      print("<breakpoint file=\"%s\" line=\"%s\" threadId=\"%d\"/>",
+      print("<breakpoint file=\"%s\" line=\"%s\" threadId=\"%d\"/>\n",
             CGI.escapeHTML(breakpoint.source), breakpoint.pos, Debugger.current_context.thnum)
     end
 
     def print_catchpoint(exception)
       context = Debugger.current_context
-      print("<exception file=\"%s\" line=\"%s\" type=\"%s\" message=\"%s\" threadId=\"%d\"/>",
+      print("<exception file=\"%s\" line=\"%s\" type=\"%s\" message=\"%s\" threadId=\"%d\"/>\n",
             CGI.escapeHTML(context.frame_file(0)), context.frame_line(0), exception.class, CGI.escapeHTML(exception.to_s), context.thnum)
     end
 
@@ -410,7 +410,7 @@ module Debugger
     end
 
     def print_at_line(context, file, line)
-      print "<suspended file=\"%s\" line=\"%s\" threadId=\"%d\" frames=\"%d\"/>",
+      print "<suspended file=\"%s\" line=\"%s\" threadId=\"%d\" frames=\"%d\"/>\n",
             CGI.escapeHTML(File.expand_path(file)), line, context.thnum, context.stack_size
     end
 
@@ -421,7 +421,7 @@ module Debugger
         print_variable('error', proxy, 'exception')
       end
     rescue Exception
-      print "<processingException type=\"%s\" message=\"%s\"/>",
+      print "<processingException type=\"%s\" message=\"%s\"/>\n",
             exception.class, CGI.escapeHTML(exception.to_s)
     end
 
@@ -444,7 +444,7 @@ module Debugger
       begin
         yield
       ensure
-        print("</#{name}>")
+        print("</#{name}>\n")
       end
     end
 

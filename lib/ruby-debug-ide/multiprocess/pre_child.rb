@@ -5,13 +5,14 @@ module Debugger
         require 'socket'
         require 'ostruct'
 
-        host = ENV['DEBUGGER_HOST']
+        host = ENV['RDEBUG_HOST']
+        port = ENV['RDEBUG_PORT']
 
         options ||= OpenStruct.new(
             'frame_bind'  => false,
             'host'        => host,
             'load_mode'   => false,
-            'port'        => Debugger.find_free_port(host),
+            'port'        => port,
             'stop'        => false,
             'tracing'     => false,
             'int_handler' => true,
@@ -22,11 +23,6 @@ module Debugger
             'debugger_memory_limit' => 10,
             'inspect_time_limit' => 100
         )
-
-        if(options.ignore_port)
-          options.port = Debugger.find_free_port(options.host)
-          options.notify_dispatcher = true
-        end
       
         start_debugger(options)
       end
@@ -36,7 +32,7 @@ module Debugger
           # we're in forked child, only need to restart control thread
           Debugger.breakpoints.clear
           Debugger.control_thread = nil
-          Debugger.start_control(options.host, options.port, options.notify_dispatcher)
+          Debugger.start_control(options.port)
         end
 
         if options.int_handler
@@ -44,7 +40,6 @@ module Debugger
           trap('INT') { Debugger.interrupt_last }
         end
 
-        # set options
         Debugger.keep_frame_binding = options.frame_bind
         Debugger.tracing = options.tracing
         Debugger.evaluation_timeout = options.evaluation_timeout

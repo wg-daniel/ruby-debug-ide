@@ -12,11 +12,11 @@ module Debugger
       end
 
       def undo_monkey
-        if ENV['IDE_PROCESS_DISPATCHER']
-          load File.expand_path(File.dirname(__FILE__) + '/multiprocess/unmonkey.rb')
-          ruby_opts = ENV['RUBYOPT'].split(' ')
-          ENV['RUBYOPT'] = ruby_opts.keep_if {|opt| !opt.end_with?('ruby-debug-ide/multiprocess/starter')}.join(' ')
-        end
+
+        load File.expand_path(File.dirname(__FILE__) + '/multiprocess/unmonkey.rb')
+        ruby_opts = ENV['RUBYOPT'].split(' ')
+        ENV['RUBYOPT'] = ruby_opts.keep_if {|opt| !opt.end_with?('ruby-debug-ide/multiprocess/starter')}.join(' ')
+
       end
     end
   end
