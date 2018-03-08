@@ -109,7 +109,7 @@ module Debugger
       # idx + 1: one-based numbering as classic-debugger
       file = context.frame_file(frame_id)
       print "<frame no=\"%s\" file=\"%s\" line=\"%s\" #{"current='true' " if frame_id == current_frame_id}/>",
-            frame_id + 1, CGI.escapeHTML(File.expand_path(file)), context.frame_line(frame_id)
+            frame_id + 1, CGI.escapeHTML(File.expand_path(file)), [1, context.frame_line(frame_id)].max
     end
 
     def print_contexts(contexts)
