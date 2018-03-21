@@ -11,7 +11,6 @@ module Debugger
         end
 
         def start
-          $stderr.puts "Start"
           start_logging_messages(@internal_socket, @internal_messages)
           start_logging_messages(@external_socket, @external_messages)
 
@@ -24,12 +23,10 @@ module Debugger
             begin
               loop do
                 msg = socket.gets
-                #$stderr.puts "external_socket Message1=#{msg}"
                 message_queue << msg
               end
             rescue => bt
-              $stderr.puts "Exception: #{bt}"
-              $stderr.puts bt.backtrace.map { |l| "\t#{l}" }.join("\n")
+              print_debug(bt.message)
             end
           end
         end
@@ -39,18 +36,51 @@ module Debugger
             begin
               loop do
                 msg = message_queue.pop
-                #$stderr.puts "external_socket Message2=#{msg}"
                 socket.puts msg
               end
             rescue => bt
-              $stderr.puts "Exception2: #{bt}"
-              $stderr.puts bt.backtrace.map { |l| "\t#{l}" }.join("\n")
+              print_debug(bt.message)
             end
           end
         end
       end
 
-      def start_debug_server(internal_port, external_port, host)
+      def read_pid_from_file(path)
+        pid = nil
+        f = File.open(path, "r")
+        f.each_line do |line|
+          line.scan(/\d+/) do |x|
+            pid = x
+          end
+        end
+        f.close
+        pid
+      end
+
+      def write_pid_to_file(pid, path)
+        File.open(path, 'w') { |file| file.write(pid) }
+      end
+
+      def check_server(port, path)
+        begin
+          port = read_pid_from_file path
+
+          ping_session = TCPSocket.new('127.0.0.1', port)
+          ping_session.puts -1
+
+          return port
+        rescue
+          return nil
+        end
+      end
+
+      def start_debug_server(external_port, host)
+        pid_file_path = File.expand_path(File.dirname(__FILE__) + '/server.pid')
+        created_port = check_server(external_port, pid_file_path)
+        return created_port if created_port
+        internal_port = Debugger.find_free_port host
+
+        write_pid_to_file(internal_port, pid_file_path)
 
         @external_sockets =  Queue.new
 
@@ -62,37 +92,34 @@ module Debugger
         DebugThread.start do
           begin
             while (external_socket = @external_server.accept)
-              $stderr.puts "external_socket #{external_socket.object_id}"
               @external_sockets << external_socket
             end
           rescue => bt
-            $stderr.puts "Exception: #{bt}"
-            $stderr.puts bt.backtrace.map { |l| "\t#{l}" }.join("\n")
+            print_debug(bt.message)
           end
         end
 
         DebugThread.start do
           begin
             while (internal_socket = @internal_server.accept)
-              if !@dispatcher_socket
-                $stderr.puts "dispatcher found"
+              unless @dispatcher_socket
                 @dispatcher_socket = @external_sockets.pop
               end
 
-              pid = internal_socket.gets
-              $stderr.puts "new internal connection with pid=#{pid}"
+              pid = internal_socket.gets.to_i
+              next if pid < 0
+
               @dispatcher_socket.puts pid
               external_socket = @external_sockets.pop
-              $stderr.puts "dispatcher#{@dispatcher_socket.object_id} notified"
-              $stderr.puts "internal_socket #{internal_socket.object_id}"
               proxy = DebugForwardingProxy.new(internal_socket, external_socket)
               proxy.start
             end
           rescue => bt
-            $stderr.puts "Exception: #{bt}"
-            $stderr.puts bt.backtrace.map { |l| "\t#{l}" }.join("\n")
+            print_debug(bt.message)
           end
         end
+
+        internal_port
       end
 
       def print_server_greeting_msg(stream, host, external_port, internal_port)

@@ -6,7 +6,7 @@ if RUBY_VERSION < "1.9"
   require 'ruby-debug-ide'
 else
   require_relative '../lib/ruby-debug-ide'
-  require_relative '../lib/server'
+  require_relative '../lib/ruby-debug-ide/server'
   require 'ruby-debug-ide/multiprocess'
 end
 
@@ -167,6 +167,11 @@ Debugger.inspect_time_limit = options.inspect_time_limit
 Debugger.catchpoint_deleted_event = options.catchpoint_deleted_event || options.rm_protocol_extensions
 Debugger.value_as_nested_element = options.value_as_nested_element || options.rm_protocol_extensions
 
+ENV['RDEBUG_HOST'] = options.host
+ENV['RDEBUG_EXTERNAL_PORT'] = options.port.to_s
+
+options.port = Debugger::DebugServer.start_debug_server(ENV['RDEBUG_EXTERNAL_PORT'], ENV['RDEBUG_HOST'])
+
 if options.attach_mode
   if Debugger::FRONT_END == "debase"
     Debugger.init_variables
@@ -179,13 +184,5 @@ if options.attach_mode
     Debugger.prepare_context
   end
 else
-  options.internal_port ||= Debugger.find_free_port(options.host)
-  ENV['RDEBUG_HOST'] = options.host
-  ENV['RDEBUG_PORT'] = options.internal_port.to_s
-  ENV['RDEBUG_EXTERNAL_PORT'] = options.port.to_s
-
-  Debugger::DebugServer.start_debug_server(ENV['RDEBUG_PORT'], ENV['RDEBUG_EXTERNAL_PORT'], ENV['RDEBUG_HOST'])
-
-  options.port = options.internal_port
   Debugger.debug_program(options)
 end
