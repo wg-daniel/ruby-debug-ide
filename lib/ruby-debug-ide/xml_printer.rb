@@ -144,16 +144,33 @@ module Debugger
       end
     end
 
-    def print_hash(hash)
+    def do_print_hash_key_value(hash)
+      print_element("variables", {:type => 'hashItem'}) do
+        hash.each {|(k, v)|
+          print_variable('key', k, 'instance')
+          print_variable('value', v, 'instance')
+        }
+      end
+    end
+
+    def do_print_hash(hash)
       print_element("variables") do
-        hash.keys.each {|k|
+        hash.each {|(k, v)|
           if k.class.name == "String"
             name = '\'' + k + '\''
           else
             name = exec_with_allocation_control(k, :to_s, OverflowMessageType::EXCEPTION_MESSAGE)
           end
-          print_variable(name, hash[k], 'instance')
+          print_variable(name, v, 'instance')
         }
+      end
+    end
+
+    def print_hash(hash)
+      if Debugger.key_value_mode
+        do_print_hash_key_value(hash)
+      else
+        do_print_hash(hash)
       end
     end
 
@@ -439,8 +456,11 @@ module Debugger
       end
     end
 
-    def print_element(name)
-      print("<#{name}>")
+    def print_element(name, additional_tags = nil)
+      additional_tags_presentation = additional_tags.nil? ? ''
+                                         : additional_tags.map {|tag, value| " #{tag}=\"#{value}\""}.reduce(:+)
+
+      print("<#{name}#{additional_tags_presentation}>")
       begin
         yield
       ensure
