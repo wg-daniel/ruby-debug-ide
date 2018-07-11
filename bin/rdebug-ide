@@ -171,6 +171,7 @@ ENV['RDEBUG_HOST'] = options.host
 ENV['RDEBUG_EXTERNAL_PORT'] = options.port.to_s
 
 options.port = Debugger::DebugServer.start_debug_server(ENV['RDEBUG_EXTERNAL_PORT'], ENV['RDEBUG_HOST'])
+ENV['RDEBUG_PORT'] = options.port.to_s
 
 if options.attach_mode
   if Debugger::FRONT_END == "debase"

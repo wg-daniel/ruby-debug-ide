@@ -5,14 +5,11 @@ module Debugger
         require 'socket'
         require 'ostruct'
 
-        host = ENV['RDEBUG_HOST']
-        port = ENV['RDEBUG_PORT']
-
         options ||= OpenStruct.new(
             'frame_bind'  => false,
-            'host'        => host,
+            'host'        => ENV['RDEBUG_HOST'],
             'load_mode'   => false,
-            'port'        => port,
+            'port'        => ENV['RDEBUG_PORT'],
             'stop'        => false,
             'tracing'     => false,
             'int_handler' => true,
