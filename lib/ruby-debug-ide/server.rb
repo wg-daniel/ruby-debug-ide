@@ -12,6 +12,11 @@ module Debugger
           @internal_messages = Queue.new
         end
 
+        def stop
+          @internal_socket.close
+          @external_socket.close
+        end
+
         def start
           start_logging_messages(@internal_socket, @internal_messages)
           start_logging_messages(@external_socket, @external_messages)
@@ -26,6 +31,8 @@ module Debugger
               while (msg = socket.gets)
                 message_queue << msg
               end
+
+              stop
             rescue => bt
               print_debug(bt.message)
             end
