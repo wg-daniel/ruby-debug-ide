@@ -1,3 +1,5 @@
+require 'tempfile'
+
 module Debugger
   module DebugServer
     class << self
@@ -21,8 +23,7 @@ module Debugger
         def start_logging_messages(socket, message_queue)
           DebugThread.start do
             begin
-              loop do
-                msg = socket.gets
+              while (msg = socket.gets)
                 message_queue << msg
               end
             rescue => bt
@@ -58,28 +59,19 @@ module Debugger
       end
 
       def write_pid_to_file(pid, path)
-        File.open(path, 'w') { |file| file.write(pid) }
-      end
-
-      def check_server(port, path)
-        begin
-          port = read_pid_from_file path
-
-          ping_session = TCPSocket.new('127.0.0.1', port)
-          ping_session.puts -1
-
-          return port
-        rescue
-          return nil
-        end
+        pid_file = File.new(path, 'w')
+        pid_file.puts pid
+        pid_file.close
       end
 
       def start_debug_server(external_port, host)
-        pid_file_path = File.expand_path(File.dirname(__FILE__) + '/server.pid')
-        created_port = check_server(external_port, pid_file_path)
-        return created_port if created_port
-        internal_port = Debugger.find_free_port host
+        pid_file_path = File.expand_path(File.dirname(Tempfile.new) + '/rm_debug.pid')
 
+        at_exit {File.delete(pid_file_path)}
+
+        return read_pid_from_file pid_file_path if File.exist? pid_file_path
+
+        internal_port = Debugger.find_free_port host
         write_pid_to_file(internal_port, pid_file_path)
 
         @external_sockets =  Queue.new
