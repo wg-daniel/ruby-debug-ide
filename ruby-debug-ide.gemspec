@@ -46,6 +46,4 @@ EOF
   spec.date = DateTime.now
   spec.rubyforge_project = 'debug-commons'
 
-  # rdoc
-  spec.has_rdoc = false
 end
